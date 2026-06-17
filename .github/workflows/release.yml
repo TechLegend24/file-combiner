@@ -1,0 +1,35 @@
+name: 'Publish Cross-Platform Release'
+on:
+  push:
+    branches:
+      - main # Or whatever your primary branch name is
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Install Rust base
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Frontend Tools
+        run: npm install
+
+      - name: Build Application Windows Package
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v__VERSION__ # Looks inside your package.json for version numbers
+          releaseName: 'CSV Merger Engine v__VERSION__'
+          releaseBody: 'Deduplication analytics tool compiled by automation cloud pipeline.'
+          releaseDraft: true
+          prerelease: false
