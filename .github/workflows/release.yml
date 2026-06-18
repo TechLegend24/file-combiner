@@ -2,13 +2,42 @@ name: 'Publish Cross-Platform Release'
 on:
   push:
     branches:
-      - main # Or whatever your primary branch name is
+      - main
 
 jobs:
   publish-tauri:
     permissions:
       contents: write
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 1. Windows 10/11 (64-bit)
+          - platform: 'windows-latest'
+            target: 'x86_64-pc-windows-msvc'
+            args: ''
+
+          # 2. Windows 10/11 (32-bit)
+          - platform: 'windows-latest'
+            target: 'i686-pc-windows-msvc'
+            args: '--target i686-pc-windows-msvc'
+
+          # 3. macOS (Intel chips)
+          - platform: 'macos-latest'
+            target: 'x86_64-apple-darwin'
+            args: '--target x86_64-apple-darwin'
+
+          # 4. macOS (M1/M2/M3 Apple Silicon chips)
+          - platform: 'macos-latest'
+            target: 'aarch64-apple-darwin'
+            args: '--target aarch64-apple-darwin'
+
+          # 5. Linux (64-bit Ubuntu/Debian ecosystem)
+          - platform: 'ubuntu-22.04'
+            target: 'x86_64-unknown-linux-gnu'
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
 
@@ -17,19 +46,35 @@ jobs:
         with:
           node-version: lts/*
 
-      - name: Install Rust base
+      - name: Install Rust Base & Targets
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Linux-specific development libraries for UI compilation
+      - name: Install Linux Dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.0-dev \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf
 
       - name: Install Frontend Tools
         run: npm install
 
-      - name: Build Application Windows Package
+      - name: Build Application Cross-Platform Packages
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v__VERSION__ # Looks inside your package.json for version numbers
+          tagName: v__VERSION__
           releaseName: 'CSV Merger Engine v__VERSION__'
           releaseBody: 'Deduplication analytics tool compiled by automation cloud pipeline.'
           releaseDraft: true
           prerelease: false
+          args: ${{ matrix.args }}
