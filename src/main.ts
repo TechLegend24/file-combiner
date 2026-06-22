@@ -1,142 +1,113 @@
-import { Chart, registerables } from 'chart.js';
-Chart.register(...registerables); // Required to initialize Chart.js modules
-
-let file1Path: string = "";
-let file2Path: string = "";
-let mergedRowsGlobal: string[] = [];
-let chartInstance: Chart | null = null;
+// Safe global hooks accessing Tauri's architecture engines
+const tauriCore = (window as any).__TAURI__?.core;
+let masterRowsGlobal: string[] = [];
 
 window.addEventListener("DOMContentLoaded", () => {
-  const tauriCore = (window as any).__TAURI__?.core;
-  const tauriDialog = (window as any).__TAURI__?.dialog;
+  const syncBtn = document.getElementById("btn-sync-device");
+  const status = document.getElementById("status-msg");
 
-  // File 1 Selector
-  document.getElementById("btn-file1")?.addEventListener("click", async () => {
-    const selected = await tauriDialog?.open({ multiple: false, filters: [{ name: 'CSV', extensions: ['csv'] }] });
-    if (selected) {
-      file1Path = typeof selected === 'string' ? selected : selected.path;
-      updatePathsLabel();
-    }
-  });
+  if (status) status.innerText = "Ready. Set hardware to USB SYNC MODE (Hold Button 6 for 5s).";
 
-  // File 2 Selector
-  document.getElementById("btn-file2")?.addEventListener("click", async () => {
-    const selected = await tauriDialog?.open({ multiple: false, filters: [{ name: 'CSV', extensions: ['csv'] }] });
-    if (selected) {
-      file2Path = typeof selected === 'string' ? selected : selected.path;
-      updatePathsLabel();
-    }
-  });
-
-  function updatePathsLabel() {
-    const lbl = document.getElementById("paths-summary");
-    if (lbl) lbl.innerText = `Ready:\nSheet 1: ${file1Path || 'None'}\nSheet 2: ${file2Path || 'None'}`;
-  }
-
-  // Combine & Render Dashboard Command
-  document.getElementById("btn-combine")?.addEventListener("click", async () => {
-    if (!file1Path || !file2Path) {
-      alert("Please assign both files first!");
+  syncBtn?.addEventListener("click", async () => {
+    const serialPlugin = (window as any).__TAURI__?.serialport;
+    if (!serialPlugin) {
+      alert("Tauri Serialport plugin is missing. Verify setup.");
       return;
     }
-    const status = document.getElementById("status-msg");
-    if (status) status.innerText = "Processing records...";
 
-    try {
-      mergedRowsGlobal = await tauriCore.invoke("process_csv_files", { fileA: file1Path, fileB: file2Path });
-      if (status) status.innerText = `Success! Derived ${mergedRowsGlobal.length - 1} data records.`;
-
-      // Enable the save button
-      (document.getElementById("btn-save") as HTMLButtonElement).disabled = false;
-
-      renderTable(mergedRowsGlobal);
-      renderChart();
-    } catch (err) {
-      if (status) status.innerText = "Error: " + err;
+    if (status) {
+      status.style.color = "#007acc";
+      status.innerText = "Scanning active USB serial lines...";
     }
-  });
 
-  // Save Merged File Command
-  document.getElementById("btn-save")?.addEventListener("click", async () => {
-    if (mergedRowsGlobal.length === 0) return;
     try {
-      const savePath = await tauriDialog?.save({
-        title: "Save Merged Data Sheet",
-        filters: [{ name: 'CSV Document', extensions: ['csv'] }]
+      // 1. Discover and target the plugged-in ESP32 board
+      const ports = await serialPlugin.availablePorts();
+      if (ports.length === 0) {
+        if (status) status.innerText = "Error: No plugged-in device detected! Check wire connection.";
+        return;
+      }
+
+      const targetPort = ports[0].portName;
+      if (status) status.innerText = `Connecting to ${targetPort} at 115200 baud...`;
+
+      // 2. Open serial line matching your firmware configuration
+      const connection = await serialPlugin.open({
+        path: targetPort,
+        baudRate: 115200
       });
 
-      if (savePath) {
-        // Send our cleaned array rows straight to a native file saver command
-        await tauriCore.invoke("save_csv_file", { path: savePath, content: mergedRowsGlobal });
-        alert("File exported successfully!");
-      }
-    } catch (err) {
-      alert("Save Error: " + err);
-    }
-  });
+      if (status) status.innerText = "Handshake success! Querying CSV database dump...";
 
-  // Redraw the graph whenever the user toggles the dropdown selector box
-  document.getElementById("chart-type")?.addEventListener("change", () => {
-    if (mergedRowsGlobal.length > 0) renderChart();
+      // 3. Request the firmware data dump
+      await connection.write("DOWNLOAD_CSV\n");
+
+      // 4. Gather the text buffer chunks
+      let accumulator = "";
+      let isReadingData = false;
+      let incomingDeviceRows: string[] = [];
+      const decoder = new TextDecoder();
+
+      // Read loop watching incoming byte packets
+      while (true) {
+        const chunk = await connection.read({ timeout: 2000 });
+        if (!chunk || chunk.length === 0) break; // Break out if connection silences
+
+        accumulator += decoder.decode(new Uint8Array(chunk));
+        let lines = accumulator.split("\n");
+        accumulator = lines.pop() || ""; // Retain incomplete trailing string sequences safely
+
+        for (let line of lines) {
+          line = line.trim();
+
+          // Intercept firmware flags
+          if (line === "---CSV_START---") {
+            isReadingData = true;
+            continue;
+          }
+          if (line === "---CSV_END---") {
+            isReadingData = false;
+            break; // Data extraction finished successfully
+          }
+
+          if (isReadingData && line.length > 0) {
+            incomingDeviceRows.push(line);
+          }
+        }
+
+        if (accumulator.includes("---CSV_END---") || !isReadingData && incomingDeviceRows.length > 0) {
+          break;
+        }
+      }
+
+      // Safe clean up closure closing down port locks
+      await connection.close();
+
+      if (incomingDeviceRows.length === 0) {
+        if (status) status.innerText = "Failed to capture logs. Ensure device shows 'USB SYNC MODE' on screen.";
+        return;
+      }
+
+      if (status) status.innerText = `Extracted ${incomingDeviceRows.length - 1} log items. Syncing with Master...`;
+
+      // 5. Invoke your native Master CSV engine to append and deduplicate these rows!
+      // We pass the fresh device array directly into your existing sync backend
+      masterRowsGlobal = await tauriCore.invoke("sync_with_device_csv", { deviceLines: incomingDeviceRows });
+
+      if (status) {
+        status.style.color = "#28a745";
+        status.innerText = `Success! Local Master CSV expanded to ${masterRowsGlobal.length - 1} unique metrics.`;
+      }
+
+      // Redraw visual table spreadsheets and Chart.js graphics canvases
+      (window as any).renderTable?.(masterRowsGlobal);
+      (window as any).renderChart?.();
+
+    } catch (err) {
+      if (status) {
+        status.style.color = "#dc3545";
+        status.innerText = "Extraction Error: " + err;
+      }
+    }
   });
 });
-
-// Render the Spreadsheet Table Grid View
-function renderTable(rows: string[]) {
-  const dataArea = document.getElementById("data-display");
-  if (!dataArea) return;
-
-  let tableHtml = "<table>";
-  rows.forEach((row, index) => {
-    const columns = row.split(",");
-    tableHtml += "<tr>";
-    columns.forEach(col => {
-      tableHtml += index === 0 ? `<th>${col}</th>` : `<td>${col}</td>`;
-    });
-    tableHtml += "</tr>";
-  });
-  tableHtml += "</table>";
-  dataArea.innerHTML = tableHtml;
-}
-
-// Generate the Chart.js visual graphics
-function renderChart() {
-  if (mergedRowsGlobal.length < 2) return;
-
-  const labels: string[] = [];
-  const numericData: number[] = [];
-
-  // Index 0 contains our column titles. Row items start at Index 1.
-  for (let i = 1; i < mergedRowsGlobal.length; i++) {
-    const cols = mergedRowsGlobal[i].split(",");
-    if (cols.length >= 2) {
-      labels.push(cols[0]); // Column 1: Row Item Labels
-      numericData.push(parseFloat(cols[1]) || 0); // Column 2: Plotted Numbers
-    }
-  }
-
-  const select = document.getElementById("chart-type") as HTMLSelectElement;
-  const chartType = select.value as 'bar' | 'line' | 'pie';
-  const ctx = (document.getElementById('analyticsChart') as HTMLCanvasElement).getContext('2d');
-
-  if (chartInstance) chartInstance.destroy(); // Clear out old rendering canvases safely
-
-  if (ctx) {
-    chartInstance = new Chart(ctx, {
-      type: chartType,
-      data: {
-        labels: labels,
-        datasets: [{
-          label: 'Data Values',
-          data: numericData,
-          backgroundColor: chartType === 'pie'
-              ? ['#ff6384', '#36a2eb', '#cc65fe', '#ffce56', '#4bc0c0', '#9966ff']
-              : '#007acc',
-          borderColor: '#005999',
-          borderWidth: 1
-        }]
-      },
-      options: { responsive: true, maintainAspectRatio: false }
-    });
-  }
-}

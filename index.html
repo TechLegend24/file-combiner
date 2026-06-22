@@ -2,23 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>CSV Data Fusion Dashboard</title>
+  <title>Master CSV Data Center</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; background: #f0f2f5; color: #333; }
     .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); max-width: 800px; margin: 20px auto; }
-    .btn-group { display: flex; gap: 10px; margin-bottom: 15px; }
-    button { background: #007acc; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; }
+    button { background: #007acc; color: white; border: none; padding: 10px 16px; border-radius: 6px; cursor: pointer; font-weight: bold; margin-bottom: 8px; }
     button:hover { background: #005999; }
-    .action-btn { background: #28a745; flex: 1; padding: 14px; font-size: 16px; }
+    .action-btn { background: #28a745; width: 100%; padding: 14px; font-size: 16px; margin-top: 10px; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; }
     .action-btn:hover { background: #218838; }
-    .save-btn { background: #ffc1067 color: #212529; flex: 1; padding: 14px; font-size: 16px; }
-    .save-btn:hover { background: #e0a800; }
     p { color: #666; font-size: 13px; margin-top: 0; margin-bottom: 15px; word-break: break-all; }
 
     /* Chart Controls */
     .chart-controls { display: flex; align-items: center; gap: 10px; margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e1e4e8; }
     select { padding: 8px 12px; border-radius: 6px; border: 1px solid #ccd1d9; font-size: 14px; background: white; }
-    .chart-container { width: 100%; max-height: 350px; margin-top: 20px; }
+    .chart-container { width: 100%; max-height: 350px; margin-top: 20px; margin-bottom: 25px; position: relative; height: 300px; }
 
     /* Layout table rules */
     #data-display { margin-top: 25px; overflow-x: auto; max-height: 250px; overflow-y: auto; border: 1px solid #e1e4e8; border-radius: 6px; }
@@ -26,34 +23,40 @@
     th { background: #f6f8fa; padding: 10px; border-bottom: 2px solid #e1e4e8; position: sticky; top: 0; }
     td { padding: 8px 10px; border-bottom: 1px solid #e1e4e8; }
     tr:hover { background: #f8f9fa; }
-    #status-msg { font-weight: bold; text-align: center; margin: 15px 0; }
+    #status-msg { font-weight: bold; text-align: center; margin: 15px 0; min-height: 18px; color: #007acc; }
   </style>
 </head>
 <body>
 
+<!-- Card 1: Local Computer File Import Engine -->
 <div class="card">
-  <h2>CSV Merger & Visual Analytics</h2>
-  <p>Select two matching format CSV files. Duplicate records will be filtered automatically.</p>
+  <h2>Master CSV Database Management</h2>
+  <p>Select an incoming CSV file from your computer's storage folders to merge unique line entries directly into your local database.</p>
 
-  <div class="btn-group">
-    <button id="btn-file1">📂 File 1</button>
-    <button id="btn-file2">📂 File 2</button>
-  </div>
-  <p id="paths-summary">No data sheets loaded.</p>
+  <button id="btn-file">📂 Choose New CSV File</button>
+  <p id="path-label">No sheet loaded.</p>
 
-  <div class="btn-group">
-    <button id="btn-combine" class="action-btn">📊 Combine & Analyze</button>
-    <button id="btn-save" class="save-btn" disabled>💾 Save Combined CSV</button>
-  </div>
-  <div id="status-msg"></div>
+  <button id="btn-combine" class="action-btn">🔄 Sync & Append File Data</button>
+</div>
 
-  <!-- Chart Configuration Toolset -->
+<!-- Card 2: Hardware Device USB Direct Pipeline (Fixed Nesting Error) -->
+<div class="card">
+  <h2>Hardware Log Fusion Dashboard</h2>
+  <p>Instructions: Hold down <b>Button 6 for 5 seconds</b> until the e-Ink hardware screen reads <i>"USB SYNC MODE"</i>. Then hook up your USB-C wire and click down below.</p>
+
+  <button id="btn-sync-device" class="action-btn" style="background: #6f42c1;">⚡ Extract & Sync Hardware Data</button>
+</div>
+
+<!-- Card 3: Combined Analytics Chart View Workspace -->
+<div class="card">
+  <div id="status-msg">Unified communication link operational.</div>
+
   <div class="chart-controls">
-    <label for="chart-type"><b>Select Chart Display:</b></label>
+    <label for="chart-type"><b>Select Dashboard Visualization:</b></label>
     <select id="chart-type">
-      <option value="bar">📊 Bar Chart</option>
-      <option value="line">📈 Line Chart</option>
-      <option value="pie">🍕 Pie Chart</option>
+      <option value="bar">📊 Bar Chart Graph</option>
+      <option value="line">📈 Line Chart Matrix</option>
+      <option value="pie">🍕 Pie Chart Layout</option>
     </select>
   </div>
 
